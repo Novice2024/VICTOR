@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { User, Camera, Loader2, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 
 function Field({ label, error, children }) {
   return (
@@ -27,10 +26,15 @@ export default function StepPersonal({ data, onChange, errors }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      update("photo_url", file_url);
-    } catch (err) {}
-    setUploading(false);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        update("photo_url", ev.target.result);
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setUploading(false);
+    }
   };
 
   const removePhoto = () => update("photo_url", null);
@@ -52,11 +56,7 @@ export default function StepPersonal({ data, onChange, errors }) {
         <div className="flex items-center gap-5">
           <div className="relative shrink-0">
             {data.photo_url ? (
-              <img
-                src={data.photo_url}
-                alt="Profile"
-                className="h-20 w-20 rounded-full object-cover border-2 border-border"
-              />
+              <img src={data.photo_url} alt="Profile" className="h-20 w-20 rounded-full object-cover border-2 border-border" />
             ) : (
               <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center border-2 border-dashed border-primary/30">
                 <User className="h-8 w-8 text-primary/40" />
@@ -90,61 +90,28 @@ export default function StepPersonal({ data, onChange, errors }) {
               <Camera className="h-4 w-4" />
               {data.photo_url ? "Change Photo" : "Upload Photo"}
             </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoUpload}
-            />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
           </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Full Name *" error={errors?.full_name}>
-            <Input
-              placeholder="Jane Smith"
-              value={data.full_name || ""}
-              onChange={e => update("full_name", e.target.value)}
-              className={errors?.full_name ? "border-destructive" : ""}
-            />
+            <Input placeholder="Jane Smith" value={data.full_name || ""} onChange={e => update("full_name", e.target.value)} className={errors?.full_name ? "border-destructive" : ""} />
           </Field>
           <Field label="Email Address *" error={errors?.email}>
-            <Input
-              type="email"
-              placeholder="jane@example.com"
-              value={data.email || ""}
-              onChange={e => update("email", e.target.value)}
-              className={errors?.email ? "border-destructive" : ""}
-            />
+            <Input type="email" placeholder="jane@example.com" value={data.email || ""} onChange={e => update("email", e.target.value)} className={errors?.email ? "border-destructive" : ""} />
           </Field>
           <Field label="Phone Number">
-            <Input
-              placeholder="+1 (555) 000-0000"
-              value={data.phone || ""}
-              onChange={e => update("phone", e.target.value)}
-            />
+            <Input placeholder="+1 (555) 000-0000" value={data.phone || ""} onChange={e => update("phone", e.target.value)} />
           </Field>
           <Field label="Location">
-            <Input
-              placeholder="San Francisco, CA"
-              value={data.location || ""}
-              onChange={e => update("location", e.target.value)}
-            />
+            <Input placeholder="San Francisco, CA" value={data.location || ""} onChange={e => update("location", e.target.value)} />
           </Field>
           <Field label="Website / Portfolio">
-            <Input
-              placeholder="https://yoursite.com"
-              value={data.website || ""}
-              onChange={e => update("website", e.target.value)}
-            />
+            <Input placeholder="https://yoursite.com" value={data.website || ""} onChange={e => update("website", e.target.value)} />
           </Field>
           <Field label="LinkedIn Profile">
-            <Input
-              placeholder="linkedin.com/in/janesmith"
-              value={data.linkedin || ""}
-              onChange={e => update("linkedin", e.target.value)}
-            />
+            <Input placeholder="linkedin.com/in/janesmith" value={data.linkedin || ""} onChange={e => update("linkedin", e.target.value)} />
           </Field>
         </div>
 
