@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Check, Save, Loader2 } from "lucide-react";
 import StepPersonal from "@/components/builder/StepPersonal";
@@ -26,6 +25,10 @@ const emptyResume = {
   step: 1,
 };
 
+// LocalStorage helpers
+const getResumes = () => JSON.parse(localStorage.getItem("resumes") || "[]");
+const saveResumes = (list) => localStorage.setItem("resumes", JSON.stringify(list));
+
 export default function ResumeBuilder() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -43,21 +46,16 @@ export default function ResumeBuilder() {
 
   // Load existing resume
   useEffect(() => {
-    const init = async () => {
-      if (resumeId) {
-        try {
-          const list = await base44.entities.Resume.filter({ id: resumeId });
-          if (list.length) {
-            const r = list[0];
-            savedIdRef.current = r.id;
-            setData(r);
-            setStep(r.step || 1);
-          }
-        } catch (e) {}
+    if (resumeId) {
+      const list = getResumes();
+      const found = list.find(r => r.id === resumeId);
+      if (found) {
+        savedIdRef.current = found.id;
+        setData(found);
+        setStep(found.step || 1);
       }
-      setLoading(false);
-    };
-    init();
+    }
+    setLoading(false);
   }, [resumeId]);
 
   // Auto-save debounce
@@ -73,13 +71,18 @@ export default function ResumeBuilder() {
   const handleSave = useCallback(async (showIndicator = true) => {
     if (showIndicator) setSaving(true);
     try {
+      const list = getResumes();
       const payload = { ...data, step };
       if (savedIdRef.current) {
-        await base44.entities.Resume.update(savedIdRef.current, payload);
+        const idx = list.findIndex(r => r.id === savedIdRef.current);
+        if (idx !== -1) list[idx] = { ...payload, id: savedIdRef.current };
+        else list.push({ ...payload, id: savedIdRef.current });
       } else {
-        const created = await base44.entities.Resume.create(payload);
-        savedIdRef.current = created.id;
+        const newId = Date.now().toString();
+        savedIdRef.current = newId;
+        list.push({ ...payload, id: newId });
       }
+      saveResumes(list);
       setSavedAt(new Date());
     } catch (e) {}
     if (showIndicator) setSaving(false);
@@ -94,15 +97,9 @@ export default function ResumeBuilder() {
       else if (!/\S+@\S+\.\S+/.test(p.email)) e.email = "Invalid email address";
       if (!p.summary?.trim()) e.summary = "Professional summary is required";
     }
-    if (step === 2 && data.experience.length === 0) {
-      e.experience = "Add at least one work experience";
-    }
-    if (step === 3 && data.education.length === 0) {
-      e.education = "Add at least one education entry";
-    }
-    if (step === 4 && data.skills.length === 0) {
-      e.skills = "Add at least one skill";
-    }
+    if (step === 2 && data.experience.length === 0) e.experience = "Add at least one work experience";
+    if (step === 3 && data.education.length === 0) e.education = "Add at least one education entry";
+    if (step === 4 && data.skills.length === 0) e.skills = "Add at least one skill";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -137,25 +134,20 @@ export default function ResumeBuilder() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top bar */}
       <div className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
         <button onClick={handleBack} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </button>
-
-        {/* Step indicators */}
         <div className="flex items-center gap-2 flex-1 justify-center max-w-md">
           {STEPS.map((s, i) => (
             <React.Fragment key={s.id}>
               <button
                 onClick={() => setStep(s.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  step === s.id
-                    ? "bg-primary text-primary-foreground shadow"
-                    : step > s.id
-                    ? "bg-primary/15 text-primary"
-                    : "bg-muted text-muted-foreground"
+                  step === s.id ? "bg-primary text-primary-foreground shadow"
+                  : step > s.id ? "bg-primary/15 text-primary"
+                  : "bg-muted text-muted-foreground"
                 }`}
               >
                 {step > s.id ? <Check className="h-3 w-3" /> : <span>{s.id}</span>}
@@ -167,7 +159,6 @@ export default function ResumeBuilder() {
             </React.Fragment>
           ))}
         </div>
-
         <div className="flex items-center gap-2">
           {savedAt && !saving && (
             <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -181,62 +172,22 @@ export default function ResumeBuilder() {
         </div>
       </div>
 
-      {/* Main content */}
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${showPreview ? "grid lg:grid-cols-2 gap-8" : ""}`}>
-        {/* Form */}
         <div className="space-y-6">
-          {step === 1 && (
-            <StepPersonal
-              data={data.personal}
-              onChange={(val) => updateData("personal", val)}
-              errors={errors}
-            />
-          )}
-          {step === 2 && (
-            <StepExperience
-              data={data.experience}
-              onChange={(val) => updateData("experience", val)}
-              errors={errors}
-            />
-          )}
-          {step === 3 && (
-            <StepEducation
-              data={data.education}
-              onChange={(val) => updateData("education", val)}
-              errors={errors}
-            />
-          )}
-          {step === 4 && (
-            <StepSkills
-              data={data.skills}
-              onChange={(val) => updateData("skills", val)}
-              errors={errors}
-            />
-          )}
-
-          {/* Navigation */}
+          {step === 1 && <StepPersonal data={data.personal} onChange={(val) => updateData("personal", val)} errors={errors} />}
+          {step === 2 && <StepExperience data={data.experience} onChange={(val) => updateData("experience", val)} errors={errors} />}
+          {step === 3 && <StepEducation data={data.education} onChange={(val) => updateData("education", val)} errors={errors} />}
+          {step === 4 && <StepSkills data={data.skills} onChange={(val) => updateData("skills", val)} errors={errors} />}
           <div className="flex items-center justify-between pt-2">
             <Button variant="outline" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               {step === 1 ? "Cancel" : "Back"}
             </Button>
             <Button onClick={handleNext} className="gap-2 shadow-lg shadow-primary/20">
-              {step === 4 ? (
-                <>
-                  <Save className="h-4 w-4" />
-                  Finish & Save
-                </>
-              ) : (
-                <>
-                  Next
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
+              {step === 4 ? (<><Save className="h-4 w-4" />Finish & Save</>) : (<>Next<ArrowRight className="h-4 w-4" /></>)}
             </Button>
           </div>
         </div>
-
-        {/* Live preview */}
         {showPreview && (
           <div className="hidden lg:block sticky top-24 h-[calc(100vh-8rem)] overflow-auto rounded-xl border border-border shadow-xl">
             <ResumePreview data={data} />
@@ -244,14 +195,9 @@ export default function ResumeBuilder() {
         )}
       </div>
 
-      {/* Mobile floating preview toggle */}
       {!showPreview && (
         <div className="fixed bottom-6 right-6 lg:hidden">
-          <Button
-            size="sm"
-            className="shadow-xl shadow-primary/20 rounded-full px-4"
-            onClick={() => setShowPreview(true)}
-          >
+          <Button size="sm" className="shadow-xl shadow-primary/20 rounded-full px-4" onClick={() => setShowPreview(true)}>
             Preview
           </Button>
         </div>
